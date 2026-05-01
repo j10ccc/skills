@@ -28,9 +28,9 @@ The first run pulls the full starred list via `gh api user/starred` and caches i
 
 ### 2. Present the repo
 
-Tell the user about the repo as flowing prose — the way you'd naturally bring it up in conversation, not as a spec sheet. Do **not** use a Markdown table or a bullet-list of metadata fields; weave the facts into one or two short paragraphs so the recall framing ("you starred this once, do you remember why?") feels like a story, not a form.
+Tell the user about the repo conversationally — the way you'd casually bring it up to a friend, weaving the details into a short paragraph or two. The recall framing ("you starred this once, do you remember why?") works best as a story.
 
-Use the user's natural conversation language, not the language this SKILL.md happens to be written in. If it isn't obvious from the request, match the language the user has been using in recent turns. For this user that defaults to Chinese — only switch to English if they're clearly speaking English to you.
+Reply in the user's original conversation language.
 
 Work the following details into the prose, in whatever order reads best:
 
