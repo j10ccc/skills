@@ -28,19 +28,21 @@ The first run pulls the full starred list via `gh api user/starred` and caches i
 
 ### 2. Present the repo
 
-Show the user the repo in your own voice — write it the way you'd naturally describe a GitHub project to a friend. The framing is "you starred this once, do you remember why?", so lean into the recall angle.
+Tell the user about the repo as flowing prose — the way you'd naturally bring it up in conversation, not as a spec sheet. Do **not** use a Markdown table or a bullet-list of metadata fields; weave the facts into one or two short paragraphs so the recall framing ("you starred this once, do you remember why?") feels like a story, not a form.
 
-Make sure the user sees:
+Use the user's natural conversation language, not the language this SKILL.md happens to be written in. If it isn't obvious from the request, match the language the user has been using in recent turns. For this user that defaults to Chinese — only switch to English if they're clearly speaking English to you.
 
-- The repo name as a clickable link to `html_url`
-- The description (or note that it has none)
+Work the following details into the prose, in whatever order reads best:
+
+- The repo name, as a clickable link to `html_url`
+- Its description, if any
 - The primary language, if any
 - The current star count
-- How long ago the user starred it (humanize `starred_at` — e.g. "2 years ago")
-- Whether the repo is still active (humanize `updated_at` — e.g. "last updated 3 months ago" vs "no updates in 4 years" — the latter is a strong "probably safe to unstar" signal worth pointing out)
-- The topics, if any
+- How long ago the user starred it — humanize `starred_at` (e.g. "two years ago")
+- Whether the repo is still active — humanize `updated_at`. If it's been quiet for years, surface that explicitly; it's a strong "probably safe to unstar" signal.
+- The topics, if any feel relevant
 
-Close with a soft prompt: do they remember it / want to keep it / want to unstar it. Don't pressure them — the goal is rediscovery, not a forced cleanup.
+Close with a soft, conversational prompt: do they remember it, want to keep it, or want to unstar it. Don't pressure — the goal is rediscovery, not a forced cleanup.
 
 ### 3. Mark as shown
 
