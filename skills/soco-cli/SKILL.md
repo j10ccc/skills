@@ -13,10 +13,13 @@ All commands in this skill use `soco`. If `soco` is missing or behaves oddly, se
 ## Quick smoke test
 
 ```sh
-soco-discover                # populate ~/.soco-cli/ speaker cache (run once)
-soco Kitchen status          # confirm the speaker is reachable
-soco Kitchen vol 25          # change volume; exit 0 = success
+soco-discover -p             # read cache first — zero network, always try this before a fresh scan
+soco-discover                # only if -p is empty: populate cache via SSDP
+soco -l Kitchen status       # confirm the speaker is reachable
+soco -l Kitchen vol 25       # change volume; exit 0 = success
 ```
+
+> **Claude Code sandbox**: every `soco <speaker> ...` command talks to the speaker on its LAN IP (`:1400`), and `soco-discover` (without `-p`) uses SSDP multicast. Both are blocked by the default Bash sandbox — run these with `dangerouslyDisableSandbox: true`. `soco-discover -p` reads a local pickle and is sandbox-safe.
 
 ## Before Implementation
 
@@ -33,12 +36,15 @@ For requests that touch existing speaker state, verify it live before generating
 
 | Request touches | Verify first |
 |---|---|
-| Existing alarm (modify/disable/delete) | `soco <speaker> alarms_spec` — see live IDs + spec |
-| A favourite name | `soco <speaker> lf` — confirm exact spelling/case |
-| A playlist name | `soco <speaker> lp` |
-| Group membership | `soco groups` |
+| **"which speaker" / no name given** | `soco-discover -p` — pure cache read, sandbox-safe; if it lists one speaker, just use it (don't ask) |
+| Existing alarm (modify/disable/delete) | `soco -l <speaker> alarms_spec` — see live IDs + spec |
+| A favourite name | `soco -l <speaker> lf` — confirm exact spelling/case |
+| A playlist name | `soco -l <speaker> lp` |
+| Group membership | `soco -l <speaker> groups` |
 | Cron / HTTP / batch script | confirm `~/.soco-cli/` cache exists (run `soco-discover` if not), then pass `-l` |
 | Any complex action | `soco --commands \| grep <action>` if action isn't in the cheat sheet |
+
+> `soco speakers` (bare) **does not exist** as a top-level command — it errors with "At least 2 parameters required". To enumerate speakers, use `soco-discover -p`.
 
 For one-shot trivial actions (`play`, `pause`, `vol N`), skip the pre-flight — speed > rigor.
 
@@ -46,7 +52,7 @@ For one-shot trivial actions (`play`, `pause`, `vol N`), skip the pre-flight —
 
 ### Required Clarifications (don't generate a command without these)
 
-1. **Speaker name is ambiguous** (e.g., "the speaker upstairs", or a partial that matches multiple rooms) — ask for the exact room name or have the user pick from `soco speakers`.
+1. **Speaker name is missing or ambiguous** (e.g., "the speaker", "音响", "the one upstairs", a partial that matches multiple rooms) — **always run `soco-discover -p` first**. If the cache shows exactly one speaker, just use it without asking. Only ask the user to disambiguate when the cache shows multiple speakers and the request can't be resolved by `_all_`. **Never report "no speakers found" based on a failed fresh `soco-discover` scan — the cache may still be valid (and the sandbox may be the reason discovery failed).**
 2. **"play this file"** — confirm the codec is supported (see `references/atoms/local-file-playback.md`; soco-cli does not transcode) and that the controller machine has a NIC in the speaker's subnet.
 3. **"automate via Home Assistant / curl / public endpoint"** — confirm the trust boundary: the HTTP API server has no auth, so deploying it must stay LAN-only or be fronted by nginx + auth.
 
@@ -90,7 +96,7 @@ soco-discover        # populate cache once
 soco -l Kitchen play
 ```
 
-Full reference: [`references/atoms/speaker-selection.md`](references/atoms/speaker-selection.md) — multi-NIC `--subnet`, fuzzy match rules, refresh tactics.
+Full reference: [`references/atoms/speaker-selection.md`](references/atoms/speaker-selection.md) — multi-NIC `--subnets`, fuzzy match rules, refresh tactics.
 
 ### Command-chain DSL (the killer feature)
 
@@ -144,7 +150,9 @@ Full reference: [`references/atoms/actions-cheatsheet.md`](references/atoms/acti
 
 ### Must follow
 
-- [ ] Pass `-l` / `--use-local-speaker-list` in cron, scripts, and the HTTP API server — avoids per-call SSDP rescan.
+- [ ] **Run every command that touches the speaker (or does SSDP discovery) outside the Claude Code sandbox** — pass `dangerouslyDisableSandbox: true` to the Bash tool. The default sandbox blocks LAN IPs (`:1400`) and SSDP multicast. Sandbox-safe exceptions: `soco-discover -p` (cache read), `soco --version`, `soco --commands`.
+- [ ] **Discovery order: cache first, scan second.** Run `soco-discover -p` before `soco-discover` (fresh scan). A failed scan does NOT mean the cache is empty.
+- [ ] Pass `-l` / `--use-local-speaker-list` in cron, scripts, the HTTP API server, **and your own one-off commands** — avoids per-call SSDP rescan (also avoids triggering sandbox/network issues).
 - [ ] Use **space-colon-space** ` : ` for chains. `play:stop` is a single arg and won't split.
 - [ ] Use `soco` as the command name throughout (verify install with `soco --version` → `soco-cli x.y.z`; skill examples target soco-cli ≥ 0.4.83 — if user's version is older and an action isn't recognized, confirm with `soco --commands | grep <action>`).
 - [ ] Quote favourite names with spaces: `pf "BBC Radio 4"`, never `pf BBC Radio 4`.

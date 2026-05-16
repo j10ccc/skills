@@ -13,35 +13,47 @@ If `soco` is missing: install soco-cli (`pip install soco-cli` or the system pac
 
 If `--version` reports something other than `soco-cli`: another tool may also ship a `soco` binary on this system. soco-cli and the unrelated `sonoscli` tool both ship a `sonos` binary (no `soco` collision in practice, but worth checking with `which -a` if behavior is odd).
 
-## Slow `soco` invocations
+## Discovery & connectivity
 
-Default discovery is SSDP-based and re-scans on every call. Fix:
+### Always start with the cache
 
-```sh
-soco-discover              # populate cache once
-soco -l Kitchen play       # use -l (--use-local-speaker-list) everywhere afterward
-```
+`soco-discover -p` is a local pickle read — sandbox-safe, zero network. If it lists speakers, use them via `soco -l <name> <action>` and **stop debugging discovery**. Everything below this section is irrelevant when the cache is already populated.
 
-Cache lives at `~/.soco-cli/`. Refresh after speaker changes (rename, new device, IP change).
+### Populating an empty cache
 
-## "Speaker not found" on multi-NIC / VLAN hosts
-
-If SSDP can't see the speaker:
+`soco-discover` does a fresh SSDP scan. It's flaky — SSDP multicast routinely drops packets. **If the first call returns "No speakers discovered" but you're confident the speakers are online, retry up to 5 times before concluding the scan has failed structurally:**
 
 ```sh
-soco-discover --subnet 192.168.10.0/24
+for i in 1 2 3 4 5; do soco-discover && break; done
 ```
 
-Or run multiple `soco-discover` invocations targeting different subnets — the cache merges.
+If 5 retries all fail, the cause is structural — see the table below.
 
-For `play_file` reachability check: speaker must be able to connect back to the controller. See `local-file-playback.md` for the networking requirements.
+### Common causes of a failed scan
 
-## macOS: Local Network privacy prompt blocks discovery
+| Cause | Symptom | Fix |
+|---|---|---|
+| **Claude Code sandbox** (most likely under Claude Code) | Silent "No speakers discovered", no error | Bypass: `dangerouslyDisableSandbox: true`. See sandbox details below. |
+| **Multi-NIC / VLAN host** | Scan went out the wrong interface | `soco-discover --subnets 192.168.10.0/24` (plural!). Multiple invocations cache-merge. |
+| **macOS Local Network privacy** | Parent terminal lacks the entitlement | Settings → Privacy & Security → Local Network → enable for **Terminal** / **iTerm** / **VS Code** / **node**. |
+| **Speaker actually offline** | Sonos app also can't see it | Power-cycle the speaker. |
 
-Same as sonoscli. macOS requires explicit permission for the parent terminal process:
+### Once you have a cache: always pass `-l`
 
-- Settings → Privacy & Security → Local Network → enable for **Terminal** / **iTerm** / **VS Code** / **node** (whichever runs `soco`).
-- If running via Claude Code in a sandbox, the prompt may not appear — switch to `direct` mode or run `soco-discover` manually first to trigger the prompt.
+Every `soco` invocation without `-l` does a fresh SSDP rescan (~1s slower per call, and sandbox-prone). Pass `-l` everywhere — one-offs, cron, scripts, HTTP server. Refresh the cache after rename / new device / IP change.
+
+### Claude Code sandbox specifics
+
+Under the default Bash sandbox, two distinct blocks bite:
+
+| Operation | Why it fails | Symptom |
+|---|---|---|
+| `soco-discover` (no `-p`) | SSDP multicast to 239.255.255.250:1900 | Silent: "No speakers discovered" with no sandbox error |
+| `soco <speaker> <action>` (any form, with or without `-l`) | TCP to speaker LAN IP `:1400` | Explicit: `Operation not permitted` from urllib3 |
+
+**Sandbox-safe**: `soco-discover -p`, `soco --version`, `soco --commands`, `soco --help`.
+
+**Everything else**: run with `dangerouslyDisableSandbox: true`. Alternative: persistent allowlist via `/sandbox` (LAN subnet + SSDP), but the per-call bypass is the simpler default.
 
 ## `play_file` plays but cuts out / speaker can't reach URL
 
